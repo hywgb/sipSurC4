@@ -62,3 +62,37 @@ func (s *sessionService) EndSession(ctx context.Context, sessionID uuid.UUID) er
 	s.logger.Infof("Ending session %s", sessionID)
 	return s.sessionRepo.Update(ctx, sessionID, updates)
 }
+
+// ListSessions 分页查询会话
+func (s *sessionService) ListSessions(ctx context.Context, filter *SessionFilter, page, pageSize int) ([]*model.CallSession, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	offset := (page - 1) * pageSize
+
+	f := map[string]interface{}{}
+	if filter != nil {
+		if filter.CallID != nil {
+			f["call_id"] = *filter.CallID
+		}
+		if filter.AgentID != nil {
+			f["agent_id"] = *filter.AgentID
+		}
+		if filter.State != nil {
+			f["state"] = *filter.State
+		}
+	}
+
+	items, err := s.sessionRepo.List(ctx, f, offset, pageSize)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.sessionRepo.Count(ctx, f)
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}

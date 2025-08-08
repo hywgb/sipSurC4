@@ -25,6 +25,7 @@ import (
 	"github.com/cloudcallcenter/call-center-service/pkg/dialer"
 	"github.com/cloudcallcenter/call-center-service/pkg/router"
 	"github.com/cloudcallcenter/call-center-service/pkg/middleware"
+	"github.com/google/uuid"
 )
 
 var (
@@ -189,7 +190,68 @@ func setupHTTPServer(
 	r.Use(gin.Recovery())
 
 	// 审计日志中间件（跳过健康检查和指标）
-	r.Use(middleware.AuditLogger(auditService, &middleware.AuditOptions{SkipPaths: []string{"/health", "/metrics"}}))
+	r.Use(middleware.AuditLogger(auditService, &middleware.AuditOptions{SkipPaths: []string{"/health", "/metrics"},
+		ActorResolver: func(c *gin.Context) (*uuid.UUID, string) {
+			actorType := c.GetHeader("X-Actor-Type")
+			if actorType == "" {
+				actorType = "api"
+			}
+			var actorID *uuid.UUID
+			if v := c.GetHeader("X-Actor-Id"); v != "" {
+				if id, err := uuid.Parse(v); err == nil {
+					actorID = &id
+				}
+			}
+			return actorID, actorType
+		},
+		TraceIDResolver: func(c *gin.Context) string {
+			if v := c.GetHeader("X-Request-Id"); v != "" {
+				return v
+			}
+			if v := c.GetHeader("X-Trace-Id"); v != "" {
+				return v
+			}
+			return ""
+		},
+		ResourceResolver: func(c *gin.Context, status int) (string, *uuid.UUID, string, string) {
+			path := c.FullPath()
+			resourceType := ""
+			if len(path) > 0 {
+				// naive: take first segment after /api/v1/
+				const prefix = "/api/v1/"
+				if len(path) > len(prefix) && path[:len(prefix)] == prefix {
+					rest := path[len(prefix):]
+					for i := 0; i < len(rest); i++ {
+						if rest[i] == '/' {
+							resourceType = rest[:i]
+							break
+						}
+					}
+					if resourceType == "" {
+						resourceType = rest
+					}
+				}
+			}
+			// normalize plural to singular if simple trailing 's'
+			if len(resourceType) > 1 && resourceType[len(resourceType)-1] == 's' {
+				resourceType = resourceType[:len(resourceType)-1]
+			}
+			var resID *uuid.UUID
+			if v := c.Param("id"); v != "" {
+				if id, err := uuid.Parse(v); err == nil {
+					resID = &id
+				}
+			}
+			level := "info"
+			if status >= 500 {
+				level = "error"
+			} else if status >= 400 {
+				level = "warn"
+			}
+			// action derived from method in middleware
+			return resourceType, resID, "", level
+		},
+	}))
 	
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {

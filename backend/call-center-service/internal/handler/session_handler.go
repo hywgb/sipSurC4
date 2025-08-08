@@ -35,10 +35,30 @@ func (h *SessionHandler) ListSessions(c *gin.Context) {
 		pageSize = 20
 	}
 
-	// TODO: 实现会话列表查询
+	filter := &service.SessionFilter{}
+	if v := c.Query("call_id"); v != "" {
+		if id, err := uuid.Parse(v); err == nil {
+			filter.CallID = &id
+		}
+	}
+	if v := c.Query("agent_id"); v != "" {
+		if id, err := uuid.Parse(v); err == nil {
+			filter.AgentID = &id
+		}
+	}
+	if v := c.Query("state"); v != "" {
+		filter.State = &v
+	}
+
+	sessions, total, err := h.sessionService.ListSessions(c.Request.Context(), filter, page, pageSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"data":      []interface{}{},
-		"total":     0,
+		"data":      sessions,
+		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
 	})

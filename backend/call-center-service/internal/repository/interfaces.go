@@ -38,6 +38,7 @@ type SessionRepository interface {
 	List(ctx context.Context, filter map[string]interface{}, offset, limit int) ([]*model.CallSession, error)
 	GetByCallID(ctx context.Context, callID uuid.UUID) ([]*model.CallSession, error)
 	GetActiveSessions(ctx context.Context) ([]*model.CallSession, error)
+	Count(ctx context.Context, filter map[string]interface{}) (int64, error)
 }
 
 // RecordingRepository 录音仓储接口

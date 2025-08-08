@@ -39,6 +39,7 @@ type SessionService interface {
 	GetActiveSessions(ctx context.Context) ([]*model.CallSession, error)
 	GetSessionsByCall(ctx context.Context, callID uuid.UUID) ([]*model.CallSession, error)
 	EndSession(ctx context.Context, sessionID uuid.UUID) error
+	ListSessions(ctx context.Context, filter *SessionFilter, page, pageSize int) ([]*model.CallSession, int64, error)
 }
 
 // AuditService 审计日志服务接口
@@ -73,6 +74,13 @@ type CallFilter struct {
 	StartDate  *time.Time
 	EndDate    *time.Time
 	Phone      *string
+}
+
+// SessionFilter 会话过滤条件
+type SessionFilter struct {
+	CallID  *uuid.UUID
+	AgentID *uuid.UUID
+	State   *string
 }
 
 // AgentFilter 座席过滤条件
