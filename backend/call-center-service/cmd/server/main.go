@@ -76,6 +76,7 @@ func main() {
 	callRepo := repository.NewCallRepository(db)
 	agentRepo := repository.NewAgentRepository(db)
 	sessionRepo := repository.NewSessionRepository(db)
+	recordingRepo := repository.NewRecordingRepository(db)
 
 	// 初始化拨号引擎
 	dialerEngine := dialer.NewDialer()
@@ -84,7 +85,7 @@ func main() {
 	routerEngine := router.NewRouter()
 
 	// 初始化服务层
-	callService := service.NewCallService(callRepo, dialerEngine, routerEngine)
+	callService := service.NewCallService(callRepo, dialerEngine, routerEngine, recordingRepo)
 	agentService := service.NewAgentService(agentRepo)
 	sessionService := service.NewSessionService(sessionRepo)
 	auditRepo := repository.NewAuditLogRepository(db)
@@ -201,6 +202,7 @@ func setupHTTPServer(
 		// 呼叫相关API
 		callHandler := handler.NewCallHandler(callService)
 		api.POST("/calls", callHandler.CreateCall)
+		api.GET("/calls", callHandler.ListCalls)
 		api.GET("/calls/:id", callHandler.GetCall)
 		api.PUT("/calls/:id", callHandler.UpdateCall)
 		api.POST("/calls/:id/hangup", callHandler.HangupCall)

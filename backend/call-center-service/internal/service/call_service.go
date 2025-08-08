@@ -16,10 +16,11 @@ import (
 
 // callService 呼叫服务实现
 type callService struct {
-	callRepo repository.CallRepository
-	dialer   dialer.Dialer
-	router   router.Router
-	logger   *logrus.Logger
+	callRepo      repository.CallRepository
+	recordingRepo repository.RecordingRepository
+	dialer        dialer.Dialer
+	router        router.Router
+	logger        *logrus.Logger
 }
 
 // NewCallService 创建呼叫服务
@@ -27,12 +28,14 @@ func NewCallService(
 	callRepo repository.CallRepository,
 	dialer dialer.Dialer,
 	router router.Router,
+	recordingRepo repository.RecordingRepository,
 ) CallService {
 	return &callService{
-		callRepo: callRepo,
-		dialer:   dialer,
-		router:   router,
-		logger:   logrus.New(),
+		callRepo:      callRepo,
+		recordingRepo: recordingRepo,
+		dialer:        dialer,
+		router:        router,
+		logger:        logrus.New(),
 	}
 }
 
@@ -203,8 +206,10 @@ func (s *callService) HangupCall(ctx context.Context, callID uuid.UUID) error {
 
 // GetCallRecording 获取呼叫录音
 func (s *callService) GetCallRecording(ctx context.Context, callID uuid.UUID) (*model.Recording, error) {
-	// TODO: 实现录音查询
-	return nil, errors.New("not implemented")
+	if s.recordingRepo == nil {
+		return nil, errors.New("recording repository not configured")
+	}
+	return s.recordingRepo.GetByCallID(ctx, callID)
 }
 
 // GetCallStats 获取呼叫统计
