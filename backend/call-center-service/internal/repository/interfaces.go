@@ -64,3 +64,10 @@ type AgentScheduleRepository interface {
 	Update(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
+
+// AuditLogRepository 审计日志仓储接口
+type AuditLogRepository interface {
+	Create(ctx context.Context, log *model.AuditLog) error
+	List(ctx context.Context, filter map[string]interface{}, like map[string]string, rangeFilter map[string][2]interface{}, offset, limit int) ([]*model.AuditLog, error)
+	Count(ctx context.Context, filter map[string]interface{}, like map[string]string, rangeFilter map[string][2]interface{}) (int64, error)
+}

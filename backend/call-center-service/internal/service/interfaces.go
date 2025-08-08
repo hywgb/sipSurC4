@@ -41,6 +41,12 @@ type SessionService interface {
 	EndSession(ctx context.Context, sessionID uuid.UUID) error
 }
 
+// AuditService 审计日志服务接口
+type AuditService interface {
+	Log(ctx context.Context, entry *AuditLogInput) error
+	List(ctx context.Context, filter *AuditLogFilter, page, pageSize int) ([]*model.AuditLog, int64, error)
+}
+
 // CreateCallRequest 创建呼叫请求
 type CreateCallRequest struct {
 	ProjectID     uuid.UUID              `json:"project_id"`
@@ -93,4 +99,42 @@ type CallStats struct {
 	AvgWaitTime     float64 `json:"avg_wait_time"`
 	AnswerRate      float64 `json:"answer_rate"`
 	AbandonRate     float64 `json:"abandon_rate"`
+}
+
+// AuditLogInput 审计日志输入
+type AuditLogInput struct {
+	TenantID     *uuid.UUID
+	ProjectID    *uuid.UUID
+	ActorID      *uuid.UUID
+	ActorType    string
+	Action       string
+	ResourceType string
+	ResourceID   *uuid.UUID
+	Level        string
+	Method       string
+	Path         string
+	StatusCode   int
+	IP           string
+	UserAgent    string
+	LatencyMs    int64
+	TraceID      string
+	Metadata     map[string]interface{}
+	Error        string
+}
+
+// AuditLogFilter 审计日志过滤条件
+type AuditLogFilter struct {
+	TenantID     *uuid.UUID
+	ProjectID    *uuid.UUID
+	ActorID      *uuid.UUID
+	ActorType    *string
+	Action       *string
+	ResourceType *string
+	ResourceID   *uuid.UUID
+	Level        *string
+	Method       *string
+	PathLike     *string
+	StatusCode   *int
+	StartTime    *time.Time
+	EndTime      *time.Time
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/cloudcallcenter/call-center-service/internal/service"
 	"github.com/cloudcallcenter/call-center-service/pkg/dialer"
 	"github.com/cloudcallcenter/call-center-service/pkg/router"
+	"github.com/cloudcallcenter/call-center-service/pkg/middleware"
 )
 
 var (
@@ -66,6 +67,7 @@ func main() {
 		&model.Agent{},
 		&model.CallSession{},
 		&model.Recording{},
+		&model.AuditLog{},
 	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
@@ -85,9 +87,11 @@ func main() {
 	callService := service.NewCallService(callRepo, dialerEngine, routerEngine)
 	agentService := service.NewAgentService(agentRepo)
 	sessionService := service.NewSessionService(sessionRepo)
+	auditRepo := repository.NewAuditLogRepository(db)
+	auditService := service.NewAuditService(auditRepo)
 
 	// 初始化HTTP服务器
-	httpServer := setupHTTPServer(callService, agentService, sessionService)
+	httpServer := setupHTTPServer(callService, agentService, sessionService, auditService)
 	
 	// 初始化gRPC服务器
 	grpcServer := setupGRPCServer(callService, agentService)
@@ -135,9 +139,9 @@ func main() {
 	log.Info("Shutting down server...")
 
 	// 优雅关闭
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		_, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-
+ 
 	grpcServer.GracefulStop()
 	
 	log.Info("Server exited")
@@ -174,6 +178,7 @@ func setupHTTPServer(
 	callService service.CallService,
 	agentService service.AgentService,
 	sessionService service.SessionService,
+	auditService service.AuditService,
 ) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -181,6 +186,9 @@ func setupHTTPServer(
 	// 中间件
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
+
+	// 审计日志中间件（跳过健康检查和指标）
+	r.Use(middleware.AuditLogger(auditService, &middleware.AuditOptions{SkipPaths: []string{"/health", "/metrics"}}))
 	
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
@@ -210,6 +218,10 @@ func setupHTTPServer(
 		api.GET("/sessions", sessionHandler.ListSessions)
 		api.GET("/sessions/:id", sessionHandler.GetSession)
 		api.GET("/sessions/active", sessionHandler.GetActiveSessions)
+
+		// 审计日志API
+		auditHandler := handler.NewAuditHandler(auditService)
+		api.GET("/audits", auditHandler.ListAudits)
 	}
 
 	return r
