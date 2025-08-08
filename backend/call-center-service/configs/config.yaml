@@ -1,0 +1,39 @@
+# 服务配置
+server:
+  http:
+    port: 8080
+  grpc:
+    port: 9090
+  metrics:
+    port: 9091
+
+# 数据库配置
+database:
+  host: localhost
+  port: 5432
+  user: callcenter
+  password: callcenter123
+  name: call_center_db
+
+# Redis配置
+redis:
+  addr: localhost:6379
+  password: ""
+  db: 0
+
+# 日志配置
+log:
+  level: info
+  format: json
+
+# 拨号器配置
+dialer:
+  max_concurrent: 1000
+  initial_ratio: 1.5
+  min_ratio: 1.0
+  max_ratio: 3.0
+
+# 路由器配置
+router:
+  algorithm: skill_based
+  timeout: 30s
