@@ -13,15 +13,23 @@ import (
 
 // agentService 座席服务实现
 type agentService struct {
-	agentRepo repository.AgentRepository
-	logger    *logrus.Logger
+	agentRepo    repository.AgentRepository
+	statsRepo    repository.AgentStatsRepository
+	scheduleRepo repository.AgentScheduleRepository
+	logger      *logrus.Logger
 }
 
 // NewAgentService 创建座席服务
-func NewAgentService(agentRepo repository.AgentRepository) AgentService {
+func NewAgentService(
+	agentRepo repository.AgentRepository,
+	statsRepo repository.AgentStatsRepository,
+	scheduleRepo repository.AgentScheduleRepository,
+) AgentService {
 	return &agentService{
-		agentRepo: agentRepo,
-		logger:    logrus.New(),
+		agentRepo:    agentRepo,
+		statsRepo:    statsRepo,
+		scheduleRepo: scheduleRepo,
+		logger:      logrus.New(),
 	}
 }
 
@@ -77,19 +85,23 @@ func (s *agentService) UpdateAgentStatus(ctx context.Context, agentID uuid.UUID,
 
 // GetAgentStats 获取座席统计
 func (s *agentService) GetAgentStats(ctx context.Context, agentID uuid.UUID, date string) (*model.AgentStats, error) {
-	// TODO: 实现统计查询
-	return &model.AgentStats{
-		AgentID:      agentID,
-		Date:         date,
-		CallsHandled: 50,
-		AvgTalkTime:  180,
-	}, nil
+	if s.statsRepo == nil {
+		// 返回基本占位数据
+		return &model.AgentStats{AgentID: agentID, Date: date}, nil
+	}
+	stats, err := s.statsRepo.GetByAgentIDAndDate(ctx, agentID, date)
+	if err != nil {
+		return nil, err
+	}
+	return stats, nil
 }
 
 // GetAgentSchedule 获取座席排班
 func (s *agentService) GetAgentSchedule(ctx context.Context, agentID uuid.UUID, startDate, endDate string) ([]*model.AgentSchedule, error) {
-	// TODO: 实现排班查询
-	return []*model.AgentSchedule{}, nil
+	if s.scheduleRepo == nil {
+		return []*model.AgentSchedule{}, nil
+	}
+	return s.scheduleRepo.GetByAgentIDAndDateRange(ctx, agentID, startDate, endDate)
 }
 
 // Login 座席登录

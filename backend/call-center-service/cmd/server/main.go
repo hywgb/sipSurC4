@@ -87,7 +87,7 @@ func main() {
 
 	// 初始化服务层
 	callService := service.NewCallService(callRepo, dialerEngine, routerEngine, recordingRepo)
-	agentService := service.NewAgentService(agentRepo)
+	agentService := service.NewAgentService(agentRepo, repository.NewAgentStatsRepository(db), repository.NewAgentScheduleRepository(db))
 	sessionService := service.NewSessionService(sessionRepo)
 	auditRepo := repository.NewAuditLogRepository(db)
 	auditService := service.NewAuditService(auditRepo)
