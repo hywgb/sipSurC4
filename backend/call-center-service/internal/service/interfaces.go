@@ -39,6 +39,13 @@ type SessionService interface {
 	GetActiveSessions(ctx context.Context) ([]*model.CallSession, error)
 	GetSessionsByCall(ctx context.Context, callID uuid.UUID) ([]*model.CallSession, error)
 	EndSession(ctx context.Context, sessionID uuid.UUID) error
+	ListSessions(ctx context.Context, filter *SessionFilter, page, pageSize int) ([]*model.CallSession, int64, error)
+}
+
+// AuditService 审计日志服务接口
+type AuditService interface {
+	Log(ctx context.Context, entry *AuditLogInput) error
+	List(ctx context.Context, filter *AuditLogFilter, page, pageSize int) ([]*model.AuditLog, int64, error)
 }
 
 // CreateCallRequest 创建呼叫请求
@@ -69,6 +76,13 @@ type CallFilter struct {
 	Phone      *string
 }
 
+// SessionFilter 会话过滤条件
+type SessionFilter struct {
+	CallID  *uuid.UUID
+	AgentID *uuid.UUID
+	State   *string
+}
+
 // AgentFilter 座席过滤条件
 type AgentFilter struct {
 	Status    *model.AgentStatus
@@ -93,4 +107,42 @@ type CallStats struct {
 	AvgWaitTime     float64 `json:"avg_wait_time"`
 	AnswerRate      float64 `json:"answer_rate"`
 	AbandonRate     float64 `json:"abandon_rate"`
+}
+
+// AuditLogInput 审计日志输入
+type AuditLogInput struct {
+	TenantID     *uuid.UUID
+	ProjectID    *uuid.UUID
+	ActorID      *uuid.UUID
+	ActorType    string
+	Action       string
+	ResourceType string
+	ResourceID   *uuid.UUID
+	Level        string
+	Method       string
+	Path         string
+	StatusCode   int
+	IP           string
+	UserAgent    string
+	LatencyMs    int64
+	TraceID      string
+	Metadata     map[string]interface{}
+	Error        string
+}
+
+// AuditLogFilter 审计日志过滤条件
+type AuditLogFilter struct {
+	TenantID     *uuid.UUID
+	ProjectID    *uuid.UUID
+	ActorID      *uuid.UUID
+	ActorType    *string
+	Action       *string
+	ResourceType *string
+	ResourceID   *uuid.UUID
+	Level        *string
+	Method       *string
+	PathLike     *string
+	StatusCode   *int
+	StartTime    *time.Time
+	EndTime      *time.Time
 }

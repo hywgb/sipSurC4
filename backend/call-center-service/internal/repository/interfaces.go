@@ -38,6 +38,7 @@ type SessionRepository interface {
 	List(ctx context.Context, filter map[string]interface{}, offset, limit int) ([]*model.CallSession, error)
 	GetByCallID(ctx context.Context, callID uuid.UUID) ([]*model.CallSession, error)
 	GetActiveSessions(ctx context.Context) ([]*model.CallSession, error)
+	Count(ctx context.Context, filter map[string]interface{}) (int64, error)
 }
 
 // RecordingRepository 录音仓储接口
@@ -63,4 +64,11 @@ type AgentScheduleRepository interface {
 	GetByAgentIDAndDateRange(ctx context.Context, agentID uuid.UUID, startDate, endDate string) ([]*model.AgentSchedule, error)
 	Update(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
 	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// AuditLogRepository 审计日志仓储接口
+type AuditLogRepository interface {
+	Create(ctx context.Context, log *model.AuditLog) error
+	List(ctx context.Context, filter map[string]interface{}, like map[string]string, rangeFilter map[string][2]interface{}, offset, limit int) ([]*model.AuditLog, error)
+	Count(ctx context.Context, filter map[string]interface{}, like map[string]string, rangeFilter map[string][2]interface{}) (int64, error)
 }

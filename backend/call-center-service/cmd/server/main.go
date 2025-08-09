@@ -24,6 +24,8 @@ import (
 	"github.com/cloudcallcenter/call-center-service/internal/service"
 	"github.com/cloudcallcenter/call-center-service/pkg/dialer"
 	"github.com/cloudcallcenter/call-center-service/pkg/router"
+	"github.com/cloudcallcenter/call-center-service/pkg/middleware"
+	"github.com/google/uuid"
 )
 
 var (
@@ -66,6 +68,7 @@ func main() {
 		&model.Agent{},
 		&model.CallSession{},
 		&model.Recording{},
+		&model.AuditLog{},
 	); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
@@ -74,6 +77,7 @@ func main() {
 	callRepo := repository.NewCallRepository(db)
 	agentRepo := repository.NewAgentRepository(db)
 	sessionRepo := repository.NewSessionRepository(db)
+	recordingRepo := repository.NewRecordingRepository(db)
 
 	// 初始化拨号引擎
 	dialerEngine := dialer.NewDialer()
@@ -82,12 +86,14 @@ func main() {
 	routerEngine := router.NewRouter()
 
 	// 初始化服务层
-	callService := service.NewCallService(callRepo, dialerEngine, routerEngine)
-	agentService := service.NewAgentService(agentRepo)
+	callService := service.NewCallService(callRepo, dialerEngine, routerEngine, recordingRepo)
+	agentService := service.NewAgentService(agentRepo, repository.NewAgentStatsRepository(db), repository.NewAgentScheduleRepository(db))
 	sessionService := service.NewSessionService(sessionRepo)
+	auditRepo := repository.NewAuditLogRepository(db)
+	auditService := service.NewAuditService(auditRepo)
 
 	// 初始化HTTP服务器
-	httpServer := setupHTTPServer(callService, agentService, sessionService)
+	httpServer := setupHTTPServer(callService, agentService, sessionService, auditService)
 	
 	// 初始化gRPC服务器
 	grpcServer := setupGRPCServer(callService, agentService)
@@ -135,9 +141,9 @@ func main() {
 	log.Info("Shutting down server...")
 
 	// 优雅关闭
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	_, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-
+ 
 	grpcServer.GracefulStop()
 	
 	log.Info("Server exited")
@@ -174,6 +180,7 @@ func setupHTTPServer(
 	callService service.CallService,
 	agentService service.AgentService,
 	sessionService service.SessionService,
+	auditService service.AuditService,
 ) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -181,6 +188,70 @@ func setupHTTPServer(
 	// 中间件
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
+
+	// 审计日志中间件（跳过健康检查和指标）
+	r.Use(middleware.AuditLogger(auditService, &middleware.AuditOptions{SkipPaths: []string{"/health", "/metrics"},
+		ActorResolver: func(c *gin.Context) (*uuid.UUID, string) {
+			actorType := c.GetHeader("X-Actor-Type")
+			if actorType == "" {
+				actorType = "api"
+			}
+			var actorID *uuid.UUID
+			if v := c.GetHeader("X-Actor-Id"); v != "" {
+				if id, err := uuid.Parse(v); err == nil {
+					actorID = &id
+				}
+			}
+			return actorID, actorType
+		},
+		TraceIDResolver: func(c *gin.Context) string {
+			if v := c.GetHeader("X-Request-Id"); v != "" {
+				return v
+			}
+			if v := c.GetHeader("X-Trace-Id"); v != "" {
+				return v
+			}
+			return ""
+		},
+		ResourceResolver: func(c *gin.Context, status int) (string, *uuid.UUID, string, string) {
+			path := c.FullPath()
+			resourceType := ""
+			if len(path) > 0 {
+				// naive: take first segment after /api/v1/
+				const prefix = "/api/v1/"
+				if len(path) > len(prefix) && path[:len(prefix)] == prefix {
+					rest := path[len(prefix):]
+					for i := 0; i < len(rest); i++ {
+						if rest[i] == '/' {
+							resourceType = rest[:i]
+							break
+						}
+					}
+					if resourceType == "" {
+						resourceType = rest
+					}
+				}
+			}
+			// normalize plural to singular if simple trailing 's'
+			if len(resourceType) > 1 && resourceType[len(resourceType)-1] == 's' {
+				resourceType = resourceType[:len(resourceType)-1]
+			}
+			var resID *uuid.UUID
+			if v := c.Param("id"); v != "" {
+				if id, err := uuid.Parse(v); err == nil {
+					resID = &id
+				}
+			}
+			level := "info"
+			if status >= 500 {
+				level = "error"
+			} else if status >= 400 {
+				level = "warn"
+			}
+			// action derived from method in middleware
+			return resourceType, resID, "", level
+		},
+	}))
 	
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
@@ -193,10 +264,12 @@ func setupHTTPServer(
 		// 呼叫相关API
 		callHandler := handler.NewCallHandler(callService)
 		api.POST("/calls", callHandler.CreateCall)
+		api.GET("/calls", callHandler.ListCalls)
 		api.GET("/calls/:id", callHandler.GetCall)
 		api.PUT("/calls/:id", callHandler.UpdateCall)
 		api.POST("/calls/:id/hangup", callHandler.HangupCall)
 		api.GET("/calls/:id/recording", callHandler.GetRecording)
+		api.GET("/calls/stats", callHandler.GetCallStats)
 
 		// 座席相关API
 		agentHandler := handler.NewAgentHandler(agentService)
@@ -204,12 +277,17 @@ func setupHTTPServer(
 		api.GET("/agents/:id", agentHandler.GetAgent)
 		api.PUT("/agents/:id/status", agentHandler.UpdateAgentStatus)
 		api.GET("/agents/:id/stats", agentHandler.GetAgentStats)
+		// 可在后续新增: /agents/:id/schedule
 
 		// 会话相关API
 		sessionHandler := handler.NewSessionHandler(sessionService)
 		api.GET("/sessions", sessionHandler.ListSessions)
 		api.GET("/sessions/:id", sessionHandler.GetSession)
 		api.GET("/sessions/active", sessionHandler.GetActiveSessions)
+
+		// 审计日志API
+		auditHandler := handler.NewAuditHandler(auditService)
+		api.GET("/audits", auditHandler.ListAudits)
 	}
 
 	return r

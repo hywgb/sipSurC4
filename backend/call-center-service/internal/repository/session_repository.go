@@ -84,3 +84,16 @@ func (r *sessionRepository) GetActiveSessions(ctx context.Context) ([]*model.Cal
 		Find(&sessions).Error
 	return sessions, err
 }
+
+// Count 统计会话数量
+func (r *sessionRepository) Count(ctx context.Context, filter map[string]interface{}) (int64, error) {
+	var count int64
+	query := r.db.WithContext(ctx).Model(&model.CallSession{})
+	for k, v := range filter {
+		query = query.Where(k+" = ?", v)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}

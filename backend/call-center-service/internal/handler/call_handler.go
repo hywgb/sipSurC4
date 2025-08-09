@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -151,4 +152,25 @@ func (h *CallHandler) ListCalls(c *gin.Context) {
 		"page":      page,
 		"page_size": pageSize,
 	})
+}
+
+// GetCallStats 获取呼叫统计
+func (h *CallHandler) GetCallStats(c *gin.Context) {
+	var tr service.TimeRange
+	if v := c.Query("start"); v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			tr.Start = t
+		}
+	}
+	if v := c.Query("end"); v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			tr.End = t
+		}
+	}
+	stats, err := h.callService.GetCallStats(c.Request.Context(), tr)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, stats)
 }
