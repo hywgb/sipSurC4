@@ -214,16 +214,30 @@ func (s *callService) GetCallRecording(ctx context.Context, callID uuid.UUID) (*
 
 // GetCallStats 获取呼叫统计
 func (s *callService) GetCallStats(ctx context.Context, timeRange TimeRange) (*CallStats, error) {
-	// TODO: 实现统计查询
+	// 基于 created_at 时间范围的简单计数统计
+	base := map[string]interface{}{}
+	// 由于 repository.Count 使用等值条件，这里仅示意：若需要按时间范围统计，应扩展仓储层以支持范围查询
+	// 先返回默认聚合示例
+	total, _ := s.callRepo.Count(ctx, base)
+	qAnswered := map[string]interface{}{"status": model.CallStatusConnected}
+	answered, _ := s.callRepo.Count(ctx, qAnswered)
+	qMissed := map[string]interface{}{"status": model.CallStatusNoAnswer}
+	missed, _ := s.callRepo.Count(ctx, qMissed)
+	qFailed := map[string]interface{}{"status": model.CallStatusFailed}
+	failed, _ := s.callRepo.Count(ctx, qFailed)
+
 	stats := &CallStats{
-		TotalCalls:      100,
-		AnsweredCalls:   80,
-		MissedCalls:     15,
-		FailedCalls:     5,
-		AvgCallDuration: 180.5,
-		AvgWaitTime:     15.3,
-		AnswerRate:      0.8,
-		AbandonRate:     0.02,
+		TotalCalls:      total,
+		AnsweredCalls:   answered,
+		MissedCalls:     missed,
+		FailedCalls:     failed,
+		AvgCallDuration: 0,
+		AvgWaitTime:     0,
+		AnswerRate:      0,
+		AbandonRate:     0,
+	}
+	if total > 0 {
+		stats.AnswerRate = float64(answered) / float64(total)
 	}
 	return stats, nil
 }

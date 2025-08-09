@@ -141,7 +141,7 @@ func main() {
 	log.Info("Shutting down server...")
 
 	// 优雅关闭
-		_, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	_, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
  
 	grpcServer.GracefulStop()
@@ -269,6 +269,7 @@ func setupHTTPServer(
 		api.PUT("/calls/:id", callHandler.UpdateCall)
 		api.POST("/calls/:id/hangup", callHandler.HangupCall)
 		api.GET("/calls/:id/recording", callHandler.GetRecording)
+		api.GET("/calls/stats", callHandler.GetCallStats)
 
 		// 座席相关API
 		agentHandler := handler.NewAgentHandler(agentService)
@@ -276,6 +277,7 @@ func setupHTTPServer(
 		api.GET("/agents/:id", agentHandler.GetAgent)
 		api.PUT("/agents/:id/status", agentHandler.UpdateAgentStatus)
 		api.GET("/agents/:id/stats", agentHandler.GetAgentStats)
+		// 可在后续新增: /agents/:id/schedule
 
 		// 会话相关API
 		sessionHandler := handler.NewSessionHandler(sessionService)
